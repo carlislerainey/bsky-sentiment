@@ -78,9 +78,9 @@
   const sign = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
   const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   let S = null;
-  // served locally: the working copy; on the web: the public repo's data branch
-  const DATA_URL = ["localhost", "127.0.0.1"].includes(location.hostname) ? "data/series.json"
-    : "https://raw.githubusercontent.com/carlislerainey/bsky-sentiment/data/series.json";
+  // the working copy when this folder is served locally; otherwise the public repo's data branch
+  const DATA_URLS = ["data/series.json",
+    "https://raw.githubusercontent.com/carlislerainey/bsky-sentiment/data/series.json"];
 
   const W = 920, H = 440, M = { l: 12, r: 56, t: 28, b: 28 };
   const X0 = new Date("2026-11-03T15:00:00-05:00"), X1 = new Date("2026-11-04T01:00:00-05:00");
@@ -163,12 +163,21 @@
   }
 
 
+  async function fetchSeries() {
+    for (const url of DATA_URLS) {
+      try {
+        const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+        if (r.ok) return await r.json();
+      } catch (e) { /* try the next source */ }
+    }
+    throw new Error("no data source answered");
+  }
+
   async function load() {
     try {
-      const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
-      S = await r.json();
+      S = await fetchSeries();
       draw();
-    } catch (e) { if (!S) $("sub").textContent = "Couldn't load data/series.json (serve this folder over http)."; }
+    } catch (e) { if (!S) $("sub").textContent = "Couldn't load the latest data; retrying every minute."; }
   }
   load();
   setInterval(load, 60e3);
