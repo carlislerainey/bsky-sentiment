@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liberal Tears (of Joy?)</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #fcfcfb; --grid: #e4e3df;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8f8e88;
+    --series-1: #2a78d6; --thin: #8f8e88;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --grid: #343432;
+      --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e88;
+      --series-1: #3987e5; --thin: #8f8e88;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --grid: #343432;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e88;
+    --series-1: #3987e5; --thin: #8f8e88;
+  }
+  html, body { margin: 0; }
+  .viz-root {
+    background: var(--surface-1); color: var(--text-primary); min-height: 100vh;
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 34px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h1 span { font-weight: 400; color: var(--text-secondary); }
+  .sub { color: var(--text-secondary); margin: 0 0 16px; }
+  .chart { position: relative; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .axis text { fill: var(--text-muted); font-size: 12px; }
+  .zero { stroke: var(--grid); stroke-width: 1; }
+  .thin { fill: none; stroke: var(--thin); stroke-width: 0.6; opacity: 0.22; }
+  .pivot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 1.5; }
+  .pivotlabel { fill: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .level { fill: none; stroke: var(--series-1); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .enddot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .endlabel { fill: var(--text-primary); font-size: 13px; font-weight: 600; }
+  .pole { fill: var(--text-secondary); font-size: 13px; }
+  .cross { stroke: var(--text-muted); stroke-width: 1; }
+  .tip {
+    position: absolute; pointer-events: none; display: none; width: 300px;
+    background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--grid);
+    border-radius: 8px; padding: 10px 12px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.12);
+  }
+  .tip .t { font-weight: 600; margin-bottom: 4px; }
+  .tip .k { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<main>
+  <h1>Liberal Tears <span>(of Joy?)</span></h1>
+  <p class="sub" id="sub"></p>
+  <div class="chart" id="box">
+    <svg id="mood" viewBox="0 0 920 440" role="img" aria-label="Election-night mood of liberal Bluesky posters over time"></svg>
+    <div class="tip" id="tip"></div>
+  </div>
+</main>
+</div>
+<script>
+(function () {
+  const $ = id => document.getElementById(id), NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return parent.appendChild(e);
+  };
+  const fmtTime = d => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  const sign = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
+  const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let S = null;
+  // served locally: the working copy; on the web: the public repo's data branch
+  const DATA_URL = ["localhost", "127.0.0.1"].includes(location.hostname) ? "data/series.json"
+    : "https://raw.githubusercontent.com/carlislerainey/bsky-sentiment/data/series.json";
+
+  const W = 920, H = 440, M = { l: 12, r: 56, t: 28, b: 28 };
+  const X0 = new Date("2026-11-03T15:00:00-05:00"), X1 = new Date("2026-11-04T01:00:00-05:00");
+  const x = d => M.l + (d - X0) / (X1 - X0) * (W - M.l - M.r);
+
+  function draw() {
+    const P = S, svg = $("mood");
+    svg.innerHTML = "";
+    $("sub").textContent = `Election-night mood of ${S.panel_size} liberal Bluesky posters · updated ${fmtTime(new Date(S.updated))} ET`;
+    const axis = el("g", { class: "axis" }, svg);
+    for (let h = 0; h <= 10; h++) {
+      const d = new Date(X0.getTime() + h * 3600e3);
+      el("text", { x: x(d), y: H - 6, "text-anchor": "middle" }, axis).textContent = fmtTime(d).replace(":00", "");
+    }
+    if (!P.level) {
+      el("text", { class: "pole", x: W / 2, y: H / 2, "text-anchor": "middle" }, svg).textContent = `Only ${P.n_posts} posts so far`;
+      return;
+    }
+    const t0 = new Date(S.start), T = P.level.length;
+    const tm = i => new Date(t0.getTime() + (i + 0.5) * 60e3);
+    const vals = Object.values(P.posters).flat().map(Math.abs).sort((a, b) => a - b);
+    const Y = Math.min(3, Math.max(1, Math.ceil((vals[Math.floor(vals.length * 0.98)] || 1) * 2) / 2));
+    const y = v => M.t + (Y - Math.max(-Y, Math.min(Y, v))) / (2 * Y) * (H - M.t - M.b);
+    const path = arr => arr.map((v, i) => `${i ? "L" : "M"}${x(tm(i)).toFixed(1)},${y(v).toFixed(1)}`).join("");
+
+    el("line", { class: "zero", x1: M.l, x2: W - M.r, y1: y(0), y2: y(0) }, svg);
+    el("text", { class: "pole", x: M.l, y: M.t - 10 }, svg).textContent = "Tears of joy ↑";
+    el("text", { class: "pole", x: M.l, y: H - M.b - 6 }, svg).textContent = "Tears of sorrow ↓";
+    const g = el("g", {}, svg);
+    for (const s of Object.values(P.posters)) el("path", { class: "thin", d: path(s) }, g);
+    el("path", { class: "level", d: path(P.level) }, svg);
+    const last = T - 1;
+
+    // label the turning points: a peak or trough counts once the line has moved at least
+    // delta away from it (zigzag rule); colliding labels keep the bigger swing
+    const v = P.level, range = Math.max(...v) - Math.min(...v), delta = Math.max(0.1, 0.15 * range);
+    const piv = [];
+    let hi = 0, lo = 0, trend = 0;
+    for (let i = 1; i < v.length; i++) {
+      if (v[i] > v[hi]) hi = i;
+      if (v[i] < v[lo]) lo = i;
+      if (trend >= 0 && v[hi] - v[i] >= delta) { piv.push({ i: hi, max: true }); trend = -1; lo = i; }
+      else if (trend <= 0 && v[i] - v[lo] >= delta) { piv.push({ i: lo, max: false }); trend = 1; hi = i; }
+    }
+    piv.forEach((p, k) => {
+      const nb = [piv[k - 1], piv[k + 1]].filter(Boolean).map(q => Math.abs(v[q.i] - v[p.i]));
+      p.swing = nb.length ? Math.max(...nb) : 0;
+    });
+    const shown = [];
+    for (const p of piv.slice().sort((a, b) => b.swing - a.swing)) {
+      const px = x(tm(p.i));
+      if (p.i < 3 || x(tm(last)) - px < 60 || shown.some(q => Math.abs(x(tm(q.i)) - px) < 70)) continue;
+      shown.push(p);
+      el("circle", { class: "pivot", cx: px, cy: y(v[p.i]), r: 3.5 }, svg);
+      el("text", { class: "pivotlabel", x: px, y: y(v[p.i]) + (p.max ? -10 : 18), "text-anchor": "middle" }, svg)
+        .textContent = `${sign(v[p.i])} · ${fmtTime(tm(p.i)).replace(/ [AP]M/, "")}`;
+    }
+    el("circle", { class: "enddot", cx: x(tm(last)), cy: y(P.level[last]), r: 5 }, svg);
+    el("text", { class: "endlabel", x: x(tm(last)) + 10, y: y(P.level[last]) + 4 }, svg).textContent = sign(P.level[last]);
+
+    // hover: crosshair + the minute's numbers
+    const cross = el("line", { class: "cross", y1: M.t, y2: H - M.b, visibility: "hidden" }, svg);
+    const tip = $("tip"), box = $("box");
+    const hit = el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent" }, svg);
+    hit.addEventListener("mousemove", ev => {
+      const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+      const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const i = Math.max(0, Math.min(last, Math.floor((p.x - M.l) / (W - M.l - M.r) * (X1 - X0) / 60e3 - (t0 - X0) / 60e3)));
+      cross.setAttribute("x1", x(tm(i))); cross.setAttribute("x2", x(tm(i))); cross.setAttribute("visibility", "visible");
+      const n15 = P.n.slice(Math.max(0, i - 14), i + 1).reduce((a, b) => a + b, 0);
+      tip.innerHTML = `<div class="t">${fmtTime(tm(i))} ET</div>
+        <div><span class="k">Panel average</span> ${sign(P.level[i])}</div>
+        <div><span class="k">${n15} posts in the 15 minutes before</span></div>`;
+      const r = box.getBoundingClientRect(), px = ev.clientX - r.left;
+      tip.style.display = "block";
+      tip.style.left = (px > r.width / 2 ? px - 316 : px + 16) + "px";
+      tip.style.top = "24px";
+    });
+    hit.addEventListener("mouseleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
+  }
+
+
+  async function load() {
+    try {
+      const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+      S = await r.json();
+      draw();
+    } catch (e) { if (!S) $("sub").textContent = "Couldn't load data/series.json (serve this folder over http)."; }
+  }
+  load();
+  setInterval(load, 60e3);
+})();
+</script>
+</body>
+</html>
