@@ -100,9 +100,9 @@
   // the svg is drawn at the container's pixel width, so text keeps its CSS size on phones too
   let W = 920, H = 460;
   const M = { l: 12, r: 80, t: 40, b: 40 };
-  // x runs from 3 PM to the hour after next (at least 9 PM, at most 1 AM), so the data fills most of the width
+  // x runs from 3 PM to the hour after next (at least 9 PM, at most 3 PM Nov 4), so the data fills most of the width
   const X0 = new Date("2026-11-03T15:00:00-05:00"), XMIN = new Date("2026-11-03T21:00:00-05:00"),
-        XMAX = new Date("2026-11-04T01:00:00-05:00");
+        XMAX = new Date("2026-11-04T15:00:00-05:00");
   let X1 = XMAX;
   const x = d => M.l + (d - X0) / (X1 - X0) * (W - M.l - M.r);
 
@@ -117,7 +117,7 @@
     const end = T ? t0.getTime() + T * 60e3 : Date.now();
     X1 = new Date(Math.min(XMAX, Math.max(XMIN, X0.getTime() + Math.ceil((end + 3600e3 - X0) / 3600e3) * 3600e3)));
     const hours = Math.round((X1 - X0) / 3600e3), perHour = (W - M.l - M.r) / hours;
-    const step = perHour >= 64 ? 1 : perHour >= 32 ? 2 : 3;
+    const step = perHour >= 64 ? 1 : perHour >= 32 ? 2 : perHour >= 16 ? 3 : 6;
     const axis = el("g", { class: "axis" }, svg);
     for (let h = 0; h <= hours; h += step) {
       const d = new Date(X0.getTime() + h * 3600e3);
