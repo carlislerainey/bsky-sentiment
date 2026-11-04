@@ -46,18 +46,20 @@
   main { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
   h1 { font-size: 34px; margin: 0 0 4px; letter-spacing: -0.01em; }
   h1 span { font-weight: 400; color: var(--text-secondary); }
-  .sub { color: var(--text-secondary); margin: 0 0 16px; }
+  .sub { color: var(--text-secondary); font-size: 17px; margin: 0 0 20px; }
   .chart { position: relative; }
   svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .axis text { fill: var(--text-muted); font-size: 12px; }
+  .axis text { fill: var(--text-muted); font-size: 18px; }
   .zero { stroke: var(--grid); stroke-width: 1; }
   .thin { fill: none; stroke: var(--thin); stroke-width: 0.6; opacity: 0.22; }
   .pivot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 1.5; }
-  .pivotlabel { fill: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .level { fill: none; stroke: var(--series-1); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .pivotlabel { fill: var(--text-secondary); font-size: 18px; font-variant-numeric: tabular-nums;
+    paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+  .level { fill: none; stroke: var(--series-1); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
   .enddot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
-  .endlabel { fill: var(--text-primary); font-size: 13px; font-weight: 600; }
-  .pole { fill: var(--text-secondary); font-size: 13px; }
+  .endlabel { fill: var(--text-primary); font-size: 19.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pole { fill: var(--text-secondary); font-size: 19.5px;
+    paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
   .cross { stroke: var(--text-muted); stroke-width: 1; }
   .tip {
     position: absolute; pointer-events: none; display: none; width: 300px;
@@ -74,7 +76,7 @@
   <h1>Liberal Tears <span>(of Joy?)</span></h1>
   <p class="sub" id="sub"></p>
   <div class="chart" id="box">
-    <svg id="mood" viewBox="0 0 920 440" role="img" aria-label="Election-night mood of liberal Bluesky posters over time"></svg>
+    <svg id="mood" viewBox="0 0 920 460" role="img" aria-label="Election-night mood of liberal Bluesky posters over time"></svg>
     <div class="tip" id="tip"></div>
   </div>
 </main>
@@ -95,35 +97,53 @@
   const DATA_URLS = ["data/series.json",
     "https://raw.githubusercontent.com/carlislerainey/bsky-sentiment/data/series.json"];
 
-  const W = 920, H = 440, M = { l: 12, r: 56, t: 28, b: 28 };
-  const X0 = new Date("2026-11-03T15:00:00-05:00"), X1 = new Date("2026-11-04T01:00:00-05:00");
+  // the svg is drawn at the container's pixel width, so text keeps its CSS size on phones too
+  let W = 920, H = 460;
+  const M = { l: 12, r: 80, t: 40, b: 40 };
+  // x runs from 3 PM to the hour after next (at least 9 PM, at most 1 AM), so the data fills most of the width
+  const X0 = new Date("2026-11-03T15:00:00-05:00"), XMIN = new Date("2026-11-03T21:00:00-05:00"),
+        XMAX = new Date("2026-11-04T01:00:00-05:00");
+  let X1 = XMAX;
   const x = d => M.l + (d - X0) / (X1 - X0) * (W - M.l - M.r);
 
   function draw() {
     const P = S, svg = $("mood");
+    W = Math.round($("box").clientWidth) || 920;
+    H = Math.round(Math.max(320, Math.min(500, W * 0.5)));
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.innerHTML = "";
     $("sub").textContent = `Election-night mood of ${S.panel_size} liberal Bluesky posters · updated ${fmtTime(new Date(S.updated))} ET`;
+    const t0 = new Date(S.start), T = P.level ? P.level.length : 0;
+    const end = T ? t0.getTime() + T * 60e3 : Date.now();
+    X1 = new Date(Math.min(XMAX, Math.max(XMIN, X0.getTime() + Math.ceil((end + 3600e3 - X0) / 3600e3) * 3600e3)));
+    const hours = Math.round((X1 - X0) / 3600e3), perHour = (W - M.l - M.r) / hours;
+    const step = perHour >= 64 ? 1 : perHour >= 32 ? 2 : 3;
     const axis = el("g", { class: "axis" }, svg);
-    for (let h = 0; h <= 10; h++) {
+    for (let h = 0; h <= hours; h += step) {
       const d = new Date(X0.getTime() + h * 3600e3);
-      el("text", { x: x(d), y: H - 6, "text-anchor": "middle" }, axis).textContent = fmtTime(d).replace(":00", "");
+      el("text", { x: x(d), y: H - 10, "text-anchor": "middle" }, axis).textContent = fmtTime(d).replace(":00", "");
     }
     if (!P.level) {
       el("text", { class: "pole", x: W / 2, y: H / 2, "text-anchor": "middle" }, svg).textContent = `Only ${P.n_posts} posts so far`;
       return;
     }
-    const t0 = new Date(S.start), T = P.level.length;
     const tm = i => new Date(t0.getTime() + (i + 0.5) * 60e3);
-    const vals = Object.values(P.posters).flat().map(Math.abs).sort((a, b) => a - b);
-    const Y = Math.min(3, Math.max(1, Math.ceil((vals[Math.floor(vals.length * 0.98)] || 1) * 2) / 2));
-    const y = v => M.t + (Y - Math.max(-Y, Math.min(Y, v))) / (2 * Y) * (H - M.t - M.b);
+    // y fits the posters' middle 96% and the average, always shows zero, and rounds out to 0.25
+    const vals = Object.values(P.posters).flat().concat(P.level).sort((a, b) => a - b);
+    const q = p => vals[Math.min(vals.length - 1, Math.floor(vals.length * p))];
+    let yLo = Math.min(0, q(0.02), ...P.level), yHi = Math.max(0, q(0.98), ...P.level);
+    const pad = 0.08 * (yHi - yLo || 1);
+    yLo = Math.floor((yLo - pad) * 4) / 4; yHi = Math.ceil((yHi + pad) * 4) / 4;
+    const y = v => M.t + (yHi - v) / (yHi - yLo) * (H - M.t - M.b);
     const path = arr => arr.map((v, i) => `${i ? "L" : "M"}${x(tm(i)).toFixed(1)},${y(v).toFixed(1)}`).join("");
 
+    const clip = el("clipPath", { id: "plotclip" }, el("defs", {}, svg));
+    el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b }, clip);
     el("line", { class: "zero", x1: M.l, x2: W - M.r, y1: y(0), y2: y(0) }, svg);
-    el("text", { class: "pole", x: M.l, y: M.t - 10 }, svg).textContent = "Tears of joy ↑";
-    el("text", { class: "pole", x: M.l, y: H - M.b - 6 }, svg).textContent = "Tears of sorrow ↓";
-    const g = el("g", {}, svg);
+    const g = el("g", { "clip-path": "url(#plotclip)" }, svg);
     for (const s of Object.values(P.posters)) el("path", { class: "thin", d: path(s) }, g);
+    el("text", { class: "pole", x: M.l, y: M.t - 14 }, svg).textContent = "Tears of joy ↑";
+    el("text", { class: "pole", x: M.l, y: H - M.b - 10 }, svg).textContent = "Tears of sorrow ↓";
     el("path", { class: "level", d: path(P.level) }, svg);
     const last = T - 1;
 
@@ -145,14 +165,14 @@
     const shown = [];
     for (const p of piv.slice().sort((a, b) => b.swing - a.swing)) {
       const px = x(tm(p.i));
-      if (p.i < 3 || x(tm(last)) - px < 60 || shown.some(q => Math.abs(x(tm(q.i)) - px) < 70)) continue;
+      if (p.i < 3 || x(tm(last)) - px < 95 || px - M.l < 50 || shown.some(q => Math.abs(x(tm(q.i)) - px) < 115)) continue;
       shown.push(p);
-      el("circle", { class: "pivot", cx: px, cy: y(v[p.i]), r: 3.5 }, svg);
-      el("text", { class: "pivotlabel", x: px, y: y(v[p.i]) + (p.max ? -10 : 18), "text-anchor": "middle" }, svg)
+      el("circle", { class: "pivot", cx: px, cy: y(v[p.i]), r: 4.5 }, svg);
+      el("text", { class: "pivotlabel", x: px, y: y(v[p.i]) + (p.max ? -14 : 27), "text-anchor": "middle" }, svg)
         .textContent = `${sign(v[p.i])} · ${fmtTime(tm(p.i)).replace(/ [AP]M/, "")}`;
     }
-    el("circle", { class: "enddot", cx: x(tm(last)), cy: y(P.level[last]), r: 5 }, svg);
-    el("text", { class: "endlabel", x: x(tm(last)) + 10, y: y(P.level[last]) + 4 }, svg).textContent = sign(P.level[last]);
+    el("circle", { class: "enddot", cx: x(tm(last)), cy: y(P.level[last]), r: 6 }, svg);
+    el("text", { class: "endlabel", x: x(tm(last)) + 13, y: y(P.level[last]) + 7 }, svg).textContent = sign(P.level[last]);
 
     // hover: crosshair + the minute's numbers
     const cross = el("line", { class: "cross", y1: M.t, y2: H - M.b, visibility: "hidden" }, svg);
@@ -169,7 +189,7 @@
         <div><span class="k">${n15} posts in the 15 minutes before</span></div>`;
       const r = box.getBoundingClientRect(), px = ev.clientX - r.left;
       tip.style.display = "block";
-      tip.style.left = (px > r.width / 2 ? px - 316 : px + 16) + "px";
+      tip.style.left = Math.max(0, Math.min(r.width - 300, px > r.width / 2 ? px - 316 : px + 16)) + "px";
       tip.style.top = "24px";
     });
     hit.addEventListener("mouseleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
@@ -194,6 +214,11 @@
   }
   load();
   setInterval(load, 60e3);
+  let lastW = 0;
+  window.addEventListener("resize", () => {
+    const w = $("box").clientWidth;
+    if (S && w !== lastW) { lastW = w; requestAnimationFrame(draw); }
+  });
 })();
 </script>
 </body>
